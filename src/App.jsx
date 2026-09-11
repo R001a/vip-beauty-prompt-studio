@@ -9,7 +9,8 @@ const MODELS = [
 const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'https://vip-beauty-prompt-studio.vercel.app').replace(/\/$/, '');
 const isVercelRuntime = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
-const apiUrl = path => import.meta.env.DEV || isVercelRuntime ? path : `${API_BASE_URL}${path}`;
+const isLocalDesktop = typeof window !== 'undefined' && ['127.0.0.1', 'localhost'].includes(window.location.hostname) && window.location.port === '41733';
+const apiUrl = path => import.meta.env.DEV || isVercelRuntime || isLocalDesktop ? path : `${API_BASE_URL}${path}`;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 const WORKSPACE_DB = 'beauty-prompt-studio';
@@ -39,7 +40,7 @@ const saveWorkspace = async value => {
 };
 
 const submitPromptJob = async (payload, signal) => {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV || isLocalDesktop) {
     const response = await fetch('/api/compile-prompt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || '提示词生成失败');

@@ -6,6 +6,10 @@ dist/
 .localappdata/
 .appdata/
 publish/
+release/
+.cache/
+desktop/secure-config.enc
+desktop/electron-dist-win/
 
 .env
 .env.*

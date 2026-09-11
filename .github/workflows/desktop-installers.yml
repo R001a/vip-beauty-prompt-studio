@@ -1,0 +1,38 @@
+name: Build desktop installers
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            command: desktop:win
+            artifact: windows-installer
+          - os: macos-latest
+            command: desktop:mac
+            artifact: macos-installer
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Restore encrypted desktop configuration
+        shell: bash
+        env:
+          DESKTOP_SECURE_CONFIG_B64: ${{ secrets.DESKTOP_SECURE_CONFIG_B64 }}
+        run: |
+          test -n "$DESKTOP_SECURE_CONFIG_B64"
+          printf '%s' "$DESKTOP_SECURE_CONFIG_B64" | base64 --decode > desktop/secure-config.enc
+      - run: npm ci
+      - run: npm run ${{ matrix.command }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/*
+          if-no-files-found: error
+

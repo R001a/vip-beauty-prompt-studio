@@ -1,12 +1,23 @@
 {
+  "name": "vip-beauty-prompt-studio-desktop",
+  "version": "5.1.0",
+  "description": "唯品会美妆提示词与生图工作台桌面版",
+  "author": "ROCK",
+  "private": true,
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "vite --configLoader native --host 127.0.0.1",
     "build": "vite build --configLoader native",
     "preview": "vite preview --configLoader native --host 127.0.0.1",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:win": "npm run build && node scripts/build-desktop.cjs win",
+    "desktop:mac": "npm run build && node scripts/build-desktop.cjs mac",
+    "desktop:pack": "npm run build && electron-builder --dir"
   },
   "type": "module",
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@vercel/functions": "^2.2.13",
     "@tailwindcss/postcss": "^4.3.1",
     "@vitejs/plugin-react": "latest",
@@ -15,6 +26,56 @@
     "react": "latest",
     "react-dom": "latest",
     "tailwindcss": "3.4.17",
-    "vite": "latest"
+    "vite": "latest",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.rock.vipbeauty.promptstudio",
+    "productName": "唯品会美妆工作台",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/**/*",
+      "!desktop/electron-dist-win/**/*",
+      "api/**/*",
+      "server/**/*",
+      "package.json",
+      "!desktop/*.template",
+      "!desktop/create-secure-config.cjs"
+    ],
+    "extraMetadata": {
+      "main": "desktop/main.cjs"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "VIP-Beauty-Studio-Windows-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "唯品会美妆工作台"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.graphics-design",
+      "artifactName": "VIP-Beauty-Studio-macOS-${version}-${arch}.${ext}",
+      "identity": null
+    }
+  },
+  "allowScripts": {
+    "electron@37.10.3": true,
+    "electron-winstaller@5.4.0": true
   }
 }

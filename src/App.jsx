@@ -12,7 +12,39 @@ const isVercelRuntime = typeof window !== 'undefined' && window.location.hostnam
 const apiUrl = path => import.meta.env.DEV || isVercelRuntime ? path : `${API_BASE_URL}${path}`;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
+const WORKSPACE_DB = 'beauty-prompt-studio';
+const WORKSPACE_STORE = 'workspace';
+const openWorkspaceDb = () => new Promise((resolve, reject) => {
+  const request = indexedDB.open(WORKSPACE_DB, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore(WORKSPACE_STORE);
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+const readSavedWorkspace = async () => {
+  const db = await openWorkspaceDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(WORKSPACE_STORE, 'readonly').objectStore(WORKSPACE_STORE).get('current');
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+};
+const saveWorkspace = async value => {
+  const db = await openWorkspaceDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(WORKSPACE_STORE, 'readwrite');
+    transaction.objectStore(WORKSPACE_STORE).put(value, 'current');
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+};
+
 const submitPromptJob = async payload => {
+  if (import.meta.env.DEV) {
+    const response = await fetch('/api/compile-prompt', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || '提示词生成失败');
+    return { ...data, elapsedSeconds: 0 };
+  }
   const startResponse = await fetch(apiUrl('/api/prompt-jobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   const startData = await startResponse.json().catch(() => ({}));
   if (!startResponse.ok) throw new Error(startData.error || '提示词任务提交失败');
@@ -102,6 +134,7 @@ export default function App() {
   const [generationPassword, setGenerationPassword] = useState('');
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [pendingMode, setPendingMode] = useState(null);
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const activeModel = MODELS.find(model => model.id === modelId);
   const productCount = productAssets.filter(Boolean).length;
   const referenceChain = useMemo(() => buildReferenceChain({ productAssets, operationsAsset, styleAsset }), [productAssets, operationsAsset, styleAsset]);
@@ -111,6 +144,27 @@ export default function App() {
   const showError = error => { const text = error?.message || String(error); setMessage(text); setErrorToast(text); };
   useEffect(() => { fetch(apiUrl('/api/providers')).then(response => response.json()).then(data => setProviderState(Object.fromEntries((data.providers || []).map(provider => [provider.id, provider])))).catch(() => showError('模型配置状态读取失败，请检查 Vercel 接口。')); }, []);
   useEffect(() => { if (!errorToast) return undefined; const timer = setTimeout(() => setErrorToast(''), 4500); return () => clearTimeout(timer); }, [errorToast]);
+  useEffect(() => {
+    readSavedWorkspace().then(saved => {
+      if (!saved) return;
+      if (saved.modelId) setModelId(saved.modelId);
+      if (Array.isArray(saved.productAssets)) setProductAssets(createProductSlots(saved.productAssets));
+      if (Array.isArray(saved.productNotes)) setProductNotes(saved.productNotes);
+      setOperationsAsset(saved.operationsAsset || null);
+      setStyleAsset(saved.styleAsset || null);
+      setOperationsNote(saved.operationsNote || '');
+      setStyleNote(saved.styleNote || '');
+      if (saved.prompt) setPrompt(saved.prompt);
+      if (Array.isArray(saved.generatedImages)) setGeneratedImages(saved.generatedImages);
+    }).catch(() => showError('本地素材恢复失败，请重新上传。')).finally(() => setWorkspaceHydrated(true));
+  }, []);
+  useEffect(() => {
+    if (!workspaceHydrated) return undefined;
+    const timer = setTimeout(() => {
+      saveWorkspace({ modelId, productAssets, productNotes, operationsAsset, styleAsset, operationsNote, styleNote, prompt, generatedImages }).catch(() => showError('本地自动保存失败，可能是浏览器存储空间不足。'));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [workspaceHydrated, modelId, productAssets, productNotes, operationsAsset, styleAsset, operationsNote, styleNote, prompt, generatedImages]);
 
   const setProductAt = async (index, file) => { try { const asset = await fileToAsset(file); setProductAssets(current => { const next = [...current]; next[index] = asset; return next; }); setMessage(''); } catch (error) { showError(error); } };
   const removeProductAt = index => setProductAssets(current => {

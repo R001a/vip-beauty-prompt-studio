@@ -38,8 +38,10 @@ export const getCanvasSpec = () => ({ width: 1330, height: 2200, ratio: '1330 / 
 export const splitPagePrompts = text => {
   const source = String(text || '').trim();
   if (!source) return [];
-  const marked = source.split(/(?=^\s*(?:#{1,4}\s*)?(?:第\s*[一二三四五六七八九十\d]+\s*屏|PAGE\s*0?\d+)\b)/gim).map(value => value.trim()).filter(Boolean);
-  return marked.length > 1 ? marked : [source];
+  const headerPattern = /^\s*(?:#{1,4}\s*)?(?:【\s*)?(?:第\s*[一二三四五六七八九十百\d]+\s*屏|PAGE\s*0?\d+)(?:[^\n]*)/gim;
+  const starts = [...source.matchAll(headerPattern)].map(match => match.index);
+  if (!starts.length) return [source];
+  return starts.map((start, index) => source.slice(start, starts[index + 1] ?? source.length).replace(/\s*```(?:text)?\s*$/i, '').trim()).filter(Boolean);
 };
 
 export const buildReferenceChain = ({ productAssets, operationsAsset, styleAsset }) => {

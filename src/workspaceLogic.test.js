@@ -13,6 +13,7 @@ import {
   createClearedState,
   buildSubmissionAssets,
   getActionState,
+  splitPagePrompts,
 } from './workspaceLogic.js';
 import { BEAUTY_V5_SYSTEM_PROMPT } from '../server/beautySkillPrompt.js';
 
@@ -131,6 +132,18 @@ test('creates a concise prompt placeholder for the chosen mode', () => {
 
 test('creates exactly five output canvases', () => {
   assert.deepEqual(createCanvasSlots(), [1, 2, 3, 4, 5]);
+});
+
+test('splits fenced Chinese screen prompts into independent ordered pages', () => {
+  const prompts = splitPagePrompts('```text\n【第1屏｜KV】\n内容一\n```\n```text\n【第2屏｜卖点】\n内容二\n```\n```text\n【第3屏｜成分】\n内容三\n```');
+  assert.equal(prompts.length, 3);
+  assert.match(prompts[0], /第1屏/);
+  assert.match(prompts[1], /第2屏/);
+  assert.match(prompts[2], /第3屏/);
+});
+
+test('splits PAGE markers without requiring a word boundary after Chinese text', () => {
+  assert.equal(splitPagePrompts('PAGE 01 hero\na\nPAGE 02 detail\nb').length, 2);
 });
 
 test('uses the requested portrait result ratio without full-size rendering', () => {

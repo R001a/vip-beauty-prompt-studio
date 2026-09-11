@@ -19,7 +19,7 @@ if (original.includes(needle)) {
 const cache = path.join(project, '.cache', 'electron-builder');
 fs.mkdirSync(cache, { recursive: true });
 const cli = path.join(project, 'node_modules', 'electron-builder', 'cli.js');
-const args = platform === 'win' ? ['--win', 'nsis'] : ['--mac', 'dmg', 'zip', '--universal'];
+const args = platform === 'win' ? ['--win', 'nsis'] : ['--mac', 'dmg', '--universal'];
 args.push('--publish', 'never');
 const localElectron = path.join(project, 'desktop', 'electron-dist-win');
 if (platform === 'win' && fs.existsSync(path.join(localElectron, 'electron.exe'))) {

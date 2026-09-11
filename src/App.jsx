@@ -196,23 +196,29 @@ export default function App() {
         const pagePrompts = allPagePrompts.slice(0, canvasSlots.length);
         setMessage(`提示词已完成，正在用 ${IMAGE_MODEL} 逐屏生图…`);
         setGeneratedImages([]);
-        const images = [];
-        for (let index = 0; index < pagePrompts.length; index += 1) {
-          if (stopRequestedRef.current) break;
-          setMessage(`正在生成第 ${index + 1} / ${pagePrompts.length} 屏…`);
-          const imageResponse = await fetch(apiUrl('/api/generate-image'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: passwordOverride, prompt: pagePrompts[index], referenceImages: productAssets.filter(Boolean).map(asset => asset.dataUrl) }), signal: controller.signal });
+        const images = Array(pagePrompts.length).fill(null);
+        let completedCount = 0;
+        setMessage(`正在并发生成 ${pagePrompts.length} 屏，返回后按 01–${String(pagePrompts.length).padStart(2, '0')} 固定落位…`);
+        const results = await Promise.allSettled(pagePrompts.map(async (pagePrompt, index) => {
+          const imageResponse = await fetch(apiUrl('/api/generate-image'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: passwordOverride, prompt: pagePrompt, referenceImages: productAssets.filter(Boolean).map(asset => asset.dataUrl) }), signal: controller.signal });
           const imageData = await imageResponse.json();
-          if (!imageResponse.ok) throw new Error(imageData.error || '生图失败');
+          if (!imageResponse.ok) throw new Error(imageData.error || `第 ${index + 1} 屏生图失败`);
           const next = imageData.images?.[0];
           if (!next) throw new Error(`第 ${index + 1} 屏未返回图片`);
-          images.push(next); setGeneratedImages([...images]);
-        }
-        setMessage(stopRequestedRef.current ? `已停止后续生图，保留已完成的 ${images.length} 屏。` : `已用 ${IMAGE_MODEL} 完成 ${images.length} 屏，已按 01–${String(images.length).padStart(2, '0')} 依次摆放。`);
+          images[index] = next;
+          completedCount += 1;
+          setGeneratedImages([...images]);
+          setMessage(`并发生成中：已返回 ${completedCount} / ${pagePrompts.length} 屏；图片按屏号固定落位。`);
+          return next;
+        }));
+        const failures = results.filter(result => result.status === 'rejected' && result.reason?.name !== 'AbortError');
+        if (failures.length) throw new Error(`${failures.length} 屏生成失败：${failures[0].reason?.message || '未知错误'}`);
+        setMessage(stopRequestedRef.current ? `已停止未完成请求，保留已返回的 ${completedCount} 屏。` : `已用 ${IMAGE_MODEL} 并发完成 ${completedCount} 屏，已按 01–${String(pagePrompts.length).padStart(2, '0')} 依次摆放。`);
       } else setMessage(`已通过 ${data.provider} 完成图片读取与 Lovart 提示词编译（约 ${data.elapsedSeconds} 秒）。`);
     } catch (error) { if (error?.name === 'AbortError' || stopRequestedRef.current) { setMessage('已停止后续生图，已完成内容继续保留。'); } else { if (String(error?.message).includes('密码')) { setGenerationPassword(''); setPendingMode(mode); setPasswordDialogOpen(true); } setPrompt('生成已停止。'); showError(error); } }
     finally { generationAbortRef.current = null; setGenerating(false); }
   };
-  const stopGeneration = () => { stopRequestedRef.current = true; setMessage('已请求停止：当前这一张完成后，不再生成后续图片。'); };
+  const stopGeneration = () => { stopRequestedRef.current = true; generationAbortRef.current?.abort(); setMessage('正在停止尚未完成的并发生图请求；已返回图片继续保留。'); };
   const requestMode = mode => {
     if (mode === 'pages' && !generationPassword) { setPendingMode(mode); setPasswordDialogOpen(true); return; }
     createPrompt(mode);

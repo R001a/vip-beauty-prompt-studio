@@ -7,6 +7,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@vercel/functions": "^2.2.13",
     "@tailwindcss/postcss": "^4.3.1",
     "@vitejs/plugin-react": "latest",
     "autoprefixer": "10.4.20",

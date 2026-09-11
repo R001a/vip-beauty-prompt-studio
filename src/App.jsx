@@ -10,6 +10,23 @@ const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'https://vip-beauty-prompt-studio.vercel.app').replace(/\/$/, '');
 const isVercelRuntime = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
 const apiUrl = path => import.meta.env.DEV || isVercelRuntime ? path : `${API_BASE_URL}${path}`;
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+const submitPromptJob = async payload => {
+  const startResponse = await fetch(apiUrl('/api/prompt-jobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const startData = await startResponse.json().catch(() => ({}));
+  if (!startResponse.ok) throw new Error(startData.error || '提示词任务提交失败');
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 5 * 60 * 1000) {
+    await wait(2500);
+    const statusResponse = await fetch(apiUrl(`/api/prompt-jobs?id=${encodeURIComponent(startData.id)}`), { cache: 'no-store' });
+    const statusData = await statusResponse.json().catch(() => ({}));
+    if (!statusResponse.ok) throw new Error(statusData.error || '提示词任务状态读取失败');
+    if (statusData.status === 'complete') return { ...statusData, elapsedSeconds: Math.round((Date.now() - startedAt) / 1000) };
+    if (statusData.status === 'error') throw new Error(statusData.error || '提示词生成失败');
+  }
+  throw new Error('提示词仍在处理，请保留当前素材后重试；已完成的任务不会因连接中断而丢失。');
+};
 
 const readFile = file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('图片文件读取失败')); reader.readAsDataURL(file); });
 const decodeImage = source => new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('图片无法解码，请重新上传')); image.src = source; });
@@ -111,9 +128,7 @@ export default function App() {
     if (!providerState[modelId]?.configured) { showError('当前模型尚未配置或配置未被服务端读取。'); return; }
     setMessage(''); setActiveMode(mode); setGenerating(true); setPrompt(`正在由 ${activeModel.name} 读取图片并编译 V5 提示词…`);
     try {
-      const response = await fetch(apiUrl('/api/compile-prompt'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ providerId: modelId, mode, images: buildSubmissionAssets({ productAssets, operationsAsset, styleAsset }), notes: { productNotes, operationsNote, styleNote } }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '提示词生成失败');
+      const data = await submitPromptJob({ providerId: modelId, mode, images: buildSubmissionAssets({ productAssets, operationsAsset, styleAsset }), notes: { productNotes, operationsNote, styleNote } });
       setPrompt(data.text);
       if (mode === 'pages') {
         const pagePrompts = splitPagePrompts(data.text);
@@ -130,7 +145,7 @@ export default function App() {
           images.push(next); setGeneratedImages([...images]);
         }
         setMessage(`已用 ${IMAGE_MODEL} 完成 ${images.length} 屏，点击图片可放大查看。`);
-      } else setMessage(`已通过 ${data.provider} 完成图片读取与 Lovart 提示词编译。`);
+      } else setMessage(`已通过 ${data.provider} 完成图片读取与 Lovart 提示词编译（约 ${data.elapsedSeconds} 秒）。`);
     } catch (error) { if (String(error?.message).includes('密码')) { setGenerationPassword(''); setPendingMode(mode); setPasswordDialogOpen(true); } setPrompt('生成已停止。'); showError(error); }
     finally { setGenerating(false); }
   };

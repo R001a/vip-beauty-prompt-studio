@@ -8,7 +8,8 @@ const MODELS = [
 ];
 const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'https://vip-beauty-prompt-studio.vercel.app').replace(/\/$/, '');
-const apiUrl = path => import.meta.env.DEV ? path : `${API_BASE_URL}${path}`;
+const isVercelRuntime = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+const apiUrl = path => import.meta.env.DEV || isVercelRuntime ? path : `${API_BASE_URL}${path}`;
 
 const readFile = file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('图片文件读取失败')); reader.readAsDataURL(file); });
 const decodeImage = source => new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('图片无法解码，请重新上传')); image.src = source; });
